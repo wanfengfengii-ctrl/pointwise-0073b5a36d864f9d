@@ -12,6 +12,7 @@ from station.archive.roll import SealedRoll
 from station.archive.store import initialize_archive
 from station.capture.intake import accept
 from station.capture.recovery import recover_capture
+from station.capture.shared import initialize_shared
 from station.capture.storage import initialize_capture
 from station.preview.progress import progress
 from station.preview.summary import ProgressSummary
@@ -41,6 +42,7 @@ def initialize_station(database: Database) -> None:
     with transaction(database, write=True) as connection:
         initialize_roster(connection)
         initialize_capture(connection)
+        initialize_shared(connection)
         initialize_archive(connection)
 
 
@@ -86,7 +88,68 @@ def _arguments(argv: list[str] | None) -> argparse.Namespace:
     retrieve = commands.add_parser('get', help='按原卷号领取固定班卷')
     retrieve.add_argument('database', type=Path)
     retrieve.add_argument('roll_id')
+    shared = commands.add_parser('shared', help='复演共帧录制并演示腾位与停源领卷')
+    shared.add_argument('scene', type=Path)
     return parser.parse_args(argv)
+
+
+def _shared_demo(args: argparse.Namespace) -> int:
+    from station.source.shared_replay import (describe_claim, run_continued_branch,
+                                              run_first_freed_branch)
+    from station.source.shared_scene import load_scene
+
+    scene = load_scene(args.scene)
+    with TemporaryDirectory(prefix='rolling-inspection-') as directory:
+        primary = run_first_freed_branch(Path(directory) / 'primary.sqlite', scene)
+        continued = run_continued_branch(Path(directory) / 'continued.sqlite', scene)
+    report = {
+        'shared': {
+            'roll_id': scene.roll_id,
+            'shift': scene.shift,
+            'positions': list(scene.positions),
+        },
+        'first_freed': {
+            'steps': [asdict(step) for step in primary.steps],
+            'waiting': {'status': primary.waiting.status,
+                        'waiting_lanes': list(primary.waiting.waiting_lanes),
+                        'waiting_frames': list(primary.waiting.waiting_frames)},
+            'preview': {'waiting_lanes': list(primary.preview.waiting_lanes),
+                        'waiting_frames': list(primary.preview.waiting_frames),
+                        'positions': [{'position': position.position,
+                                       'status': position.status,
+                                       'value': position.value}
+                                      for position in primary.preview.positions]},
+            'final_status': primary.final.status,
+            'claim': describe_claim(primary.claimed),
+            'stopped_source': {
+                'headers': [{
+                    'lane': captured.header.lane,
+                    'sequence': captured.header.sequence,
+                    'origin': captured.header.origin,
+                    'frame_id': captured.header.frame_id,
+                    'confirmation': captured.confirmation,
+                } for captured in primary.stopped_headers if captured is not None],
+                'frame': None if primary.stopped_frame is None else {
+                    'frame_id': primary.stopped_frame.frame_id,
+                    'value': primary.stopped_frame.value,
+                    'raw': primary.stopped_frame.raw,
+                },
+                'reopened_claim': describe_claim(primary.reopened),
+            },
+        },
+        'continued': {
+            'steps': [asdict(step) for step in continued.steps],
+            'waiting': {'status': continued.waiting.status,
+                        'waiting_lanes': list(continued.waiting.waiting_lanes),
+                        'waiting_frames': list(continued.waiting.waiting_frames)},
+            'final_status': continued.final.status,
+            'claim': describe_claim(continued.claimed),
+        },
+    }
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+    issued = (primary.final.status is IssueStatus.ISSUED
+              and continued.final.status is IssueStatus.ISSUED)
+    return 0 if issued else 1
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -96,6 +159,8 @@ def main(argv: list[str] | None = None) -> int:
             roll = get(args.database, args.roll_id)
             print(json.dumps(None if roll is None else asdict(roll), ensure_ascii=False, indent=2))
             return 1 if roll is None else 0
+        if args.command == 'shared':
+            return _shared_demo(args)
         recording = load_recording(args.recording)
         if args.command == 'demo':
             with TemporaryDirectory(prefix='rolling-inspection-') as directory:

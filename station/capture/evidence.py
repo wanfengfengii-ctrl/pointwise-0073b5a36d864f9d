@@ -38,6 +38,11 @@ class SourceReading:
     origin: str
 
 
+@dataclass(frozen=True)
+class SharedSourceReading(SourceReading):
+    frame_id: str
+
+
 def same_delivery(captured: CaptureEvidence, offered: Delivery) -> bool:
     return captured.delivery == offered
 

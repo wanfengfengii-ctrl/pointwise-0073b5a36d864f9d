@@ -4,7 +4,13 @@
 
 ## 运行
 
-使用 Python 3.11 标准库。在项目根目录执行完整回归。
+使用 Python 3.11 标准库。在项目根目录执行完整回归并检查共帧作业。
+
+```sh
+python3 -B check_shared.py
+```
+
+`check_shared.py` 先运行原 `check_project.py`，再核对共帧腾位、续收和停源领卷，任一失败退出非零。只跑原回归可执行：
 
 ```sh
 python3 -B check_project.py
@@ -21,6 +27,12 @@ python3 -B -m station.source.replay demo examples/night-shift.json
 ```sh
 python3 -B -m station.source.replay run night.sqlite examples/night-shift.json
 python3 -B -m station.source.replay get night.sqlite R17
+```
+
+复演共帧夜班并打印腾位、续收与停源领卷结果。该入口使用临时站库，同时演示先归还一路继续采下一帧的分支。
+
+```sh
+python3 -B -m station.source.replay shared examples/shared-frame.json
 ```
 
 `run` 和 `demo` 在班卷成功签发时退出 0，卷仍待收或因冲突未签时退出 1。输入、设备或存储错误退出 2。`get` 对未签卷输出 `null` 并退出 1。重跑录制会复用既有登记和实收，已签班卷的签发检查返回原成果。
@@ -49,9 +61,20 @@ python3 -B -m station.source.replay get night.sqlite R17
 | `station.preview.progress.progress(database, roll_id)` | 返回当前证据的原位视图、冲突和计数。未知卷抛出 `KeyError` |
 | `station.archive.issue.seal(database, roll_id)` | 返回 `waiting`、`conflict` 或 `issued` 的 `IssueResult`。已签卷复用首执。未知卷抛出 `KeyError`，写入失败向调用方报告 SQLite 错误 |
 | `station.archive.retrieve.get(database, roll_id)` | 领取指定卷的正文和首执，未签返回 `None` |
+| `station.roster.register.register_shared(database, roll_id, shift, positions)` | 登记共帧卷。清册输入和返回值同 `register`，登记后卷的采录模式固定。同号改模式抛出 `ValueError` |
+| `station.capture.intake.accept_header(database, header, device)` 和 `accept_frame(database, frame, device)` | 分别实收报头和正文。首次实收核对设备原件，重投与已收内容比较；改参抛出 `ValueError`。报头返回 `header` 和 `confirmation`，正文返回该 `Frame` |
+| `station.capture.recovery.find_header(database, identity)`、`find_frame(database, roll_id, frame_id)` 和 `recover_shared(database, roll_id, device)` | 从站库查询报头、正文实收，或按卷续办归还并清理已入正文的额外保管。设备停源时仍可查询 |
 
 来件身份是 `(roll_id, lane, sequence)`。同参重投须保留原位、读数、出处和原文。声明确认本路序号的上界，声明可以越过范围内的来件，0 表示确定空路。归档在同一事务读取清册和证据，先核实两路各有结束声明及从 1 到截点的全部持久实收，再逐原位核值。缺少任一路声明或范围内来件时只报待收。实收和确认结局分别记录，释放失答后的实收仍计入覆盖。
 
 等值读数按原位计一笔，保留原位内的所有来件出处。异值镜像在预览中展示原读数，覆盖齐备后阻止整卷签发。覆盖齐备且两路均无来件的原位列为缺测，正文读数为 `null`。数值 0 是实测。读数在仪器原单位下用精确整数保存。正文沿用清册顺序，出处按链路及数字序号排序。
 
 清册同号同参可重复登记，首个合法接管提交时记录开始采录。接管写失败时设备保留原件。设备释放失答时，站端保存待核状态和完整原件。班卷正文和首执同一事务提交，签存失败可以停源后用原证据续签。旧卷始终按请求卷号领取。
+
+## 共帧卷
+
+共帧卷由 `register_shared` 登记，登记后模式固定：共帧卷拒收普通 `Delivery`，普通卷拒收共帧件，二者互不混入。报头身份仍是 `(roll_id, lane, sequence)`，另带卷内帧号。同一帧号读数和原文相同也可分属两帧。
+
+报头入库后即可归还本路槽位，无须等待另一路实收；若归还时仍有同帧保管引用，或该帧正文已入库，则直接腾位。正文入库前设备须保住原帧：当某次归还是该帧最后一条引用时，站端先建立硬件保管再归还槽位，正文口恢复后仍可按原帧号取回。正文入库后清理该帧的额外保管并释放占用槽位。提交失败时不凭本次写入腾位、清理正文或签发。
+
+签发沿用 `seal` 和 `get`。待收结果的 `waiting_lanes` 列出结束声明或范围内报头尚欠的链路，`waiting_frames` 列出已收报头所指的欠正文帧号；两路结束范围和所指正文齐备才签发。签件在原位 `sources` 中附 `frame_id`，卷级 `frames` 按帧号索引实际引用的正文且同帧只存一份。同值同文的其他帧不能补欠件。

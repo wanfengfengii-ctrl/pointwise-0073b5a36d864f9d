@@ -5,7 +5,7 @@ from contextlib import closing, contextmanager
 from os import PathLike
 
 from station.roster.positions import Position
-from station.roster.state import RollRoster, RosterStatus
+from station.roster.state import RollMode, RollRoster, RosterStatus
 
 Database = str | PathLike[str]
 
@@ -19,26 +19,37 @@ def transaction(database: Database, *, write: bool = False) -> Iterator[sqlite3.
             yield connection
 
 
+def _roster_columns(connection: sqlite3.Connection) -> set[str]:
+    return {row[1] for row in connection.execute('PRAGMA table_info(rosters)')}
+
+
 def initialize_roster(connection: sqlite3.Connection) -> None:
     connection.execute('''
         CREATE TABLE IF NOT EXISTS rosters (
             roll_id TEXT PRIMARY KEY NOT NULL,
             shift TEXT NOT NULL,
             positions TEXT NOT NULL,
-            status TEXT NOT NULL CHECK (status IN ('registered', 'capture_started'))
+            status TEXT NOT NULL CHECK (status IN ('registered', 'capture_started')),
+            mode TEXT NOT NULL DEFAULT 'delivery' CHECK (mode IN ('delivery', 'shared'))
         )
     ''')
+    if 'mode' not in _roster_columns(connection):
+        # Earlier stations registered every roll for ordinary deliveries.
+        connection.execute(
+            "ALTER TABLE rosters ADD COLUMN mode TEXT NOT NULL DEFAULT 'delivery' "
+            "CHECK (mode IN ('delivery', 'shared'))"
+        )
 
 
 def load_roster(connection: sqlite3.Connection, roll_id: str) -> RollRoster | None:
     row = connection.execute(
-        'SELECT shift, positions, status FROM rosters WHERE roll_id = ?', (roll_id,)
+        'SELECT shift, positions, status, mode FROM rosters WHERE roll_id = ?', (roll_id,)
     ).fetchone()
     if row is None:
         return None
-    shift, positions, status = row
+    shift, positions, status, mode = row
     return RollRoster(roll_id, shift, tuple(Position(label) for label in json.loads(positions)),
-                      RosterStatus(status))
+                      RosterStatus(status), RollMode(mode))
 
 
 def require_roster(connection: sqlite3.Connection, roll_id: str) -> RollRoster:
@@ -51,8 +62,9 @@ def require_roster(connection: sqlite3.Connection, roll_id: str) -> RollRoster:
 def insert_roster(connection: sqlite3.Connection, roster: RollRoster) -> None:
     labels = [position.label for position in roster.positions]
     connection.execute(
-        'INSERT INTO rosters (roll_id, shift, positions, status) VALUES (?, ?, ?, ?)',
-        (roster.roll_id, roster.shift, json.dumps(labels, ensure_ascii=False), roster.status.value),
+        'INSERT INTO rosters (roll_id, shift, positions, status, mode) VALUES (?, ?, ?, ?, ?)',
+        (roster.roll_id, roster.shift, json.dumps(labels, ensure_ascii=False), roster.status.value,
+         roster.mode.value),
     )
 
 

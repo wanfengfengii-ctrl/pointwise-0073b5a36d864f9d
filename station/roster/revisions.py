@@ -5,7 +5,8 @@ from station.roster.store import write_roster_status
 
 
 def resolve_registration(stored: RollRoster, requested: RollRoster) -> RollRoster:
-    if stored.shift != requested.shift or stored.positions != requested.positions:
+    if (stored.shift != requested.shift or stored.positions != requested.positions
+            or stored.mode is not requested.mode):
         raise ValueError(f'roll {stored.roll_id!r} already has a different roster')
     return stored
 
