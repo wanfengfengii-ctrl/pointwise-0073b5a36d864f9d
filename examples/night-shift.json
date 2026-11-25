@@ -1,0 +1,21 @@
+{
+  "roll_id": "R17",
+  "shift": "夜班",
+  "positions": ["1", "2", "3"],
+  "events": [
+    {"kind": "delivery", "lane": "A", "sequence": 1, "position": "1", "value": 7, "origin": "A1", "raw": "1,7,A1"},
+    {"kind": "end", "lane": "A", "last_sequence": 1},
+    {"kind": "preview"},
+    {"kind": "seal"},
+    {"kind": "end", "lane": "B", "last_sequence": 2},
+    {"kind": "lose_reply", "lane": "B"},
+    {"kind": "delivery", "lane": "B", "sequence": 2, "position": "2", "value": 11, "origin": "B2", "raw": "2,11,B2"},
+    {"kind": "disconnect", "lane": "B"},
+    {"kind": "seal"},
+    {"kind": "reconnect", "lane": "B"},
+    {"kind": "delivery", "lane": "B", "sequence": 1, "position": "1", "value": 7, "origin": "B1", "raw": "1,7,B1"},
+    {"kind": "preview"},
+    {"kind": "disconnect", "lane": "B"},
+    {"kind": "disconnect", "lane": "A"}
+  ]
+}

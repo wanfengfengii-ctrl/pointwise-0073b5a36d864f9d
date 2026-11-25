@@ -1,0 +1,21 @@
+{
+  "checkpoints": [
+    {"event_index": 2, "position_statuses": ["observed", "pending", "pending"]},
+    {"event_index": 3, "status": "waiting", "waiting_lanes": ["B"]},
+    {"event_index": 8, "status": "waiting", "waiting_lanes": ["B"]},
+    {"event_index": 11, "position_statuses": ["observed", "observed", "missing"]}
+  ],
+  "roll": {
+    "roll_id": "R17",
+    "shift": "夜班",
+    "positions": [
+      {"position": "1", "value": 7, "sources": [{"lane": "A", "sequence": 1, "value": 7, "origin": "A1"}, {"lane": "B", "sequence": 1, "value": 7, "origin": "B1"}]},
+      {"position": "2", "value": 11, "sources": [{"lane": "B", "sequence": 2, "value": 11, "origin": "B2"}]},
+      {"position": "3", "value": null, "sources": []}
+    ],
+    "measured": 2,
+    "missing": 1,
+    "receipt": {"roll_id": "R17", "receipt_id": "receipt/R17"}
+  },
+  "recheck_positions": ["3"]
+}

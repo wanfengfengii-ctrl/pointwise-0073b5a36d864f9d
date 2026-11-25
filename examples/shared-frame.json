@@ -1,0 +1,20 @@
+{
+  "roll_id": "R28",
+  "shift": "夜班",
+  "positions": ["1", "2"],
+  "shared": {
+    "frame": {"frame_id": "F", "value": 7, "raw": "f7"},
+    "headers": [
+      {"lane": "A", "sequence": 1, "position": "1", "origin": "A1"},
+      {"lane": "B", "sequence": 1, "position": "1", "origin": "B1"}
+    ]
+  },
+  "next_a": {
+    "frame": {"frame_id": "G", "value": 7, "raw": "f7"},
+    "headers": [{"lane": "A", "sequence": 2, "position": "1", "origin": "A2"}]
+  },
+  "next_b": {
+    "frame": {"frame_id": "G", "value": 7, "raw": "f7"},
+    "headers": [{"lane": "B", "sequence": 2, "position": "1", "origin": "B2"}]
+  }
+}
